@@ -1,0 +1,77 @@
+---
+- hosts: all
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Check login users
+      register: users
+      shell: "users"
+      ignore_errors: true
+
+    - debug:
+        msg: "{{ users.stdout }}"
+
+    - name: Clean up var to allow room for updates
+      shell: yum clean all
+      args:
+        warn: false
+
+    - name: "Starting patching change"
+      block:
+        - name: Apply all patches
+          yum:
+            name: '*'
+            state: latest
+          register: yum_update
+          ignore_errors: true
+          notify:
+           - Reboot Server
+
+        - name: Check if yum update failed
+          fail:
+            msg: "yum update report on server {{ inventory_hostname }} message: {{ yum_update.msg }}"
+          when: yum_update.failed == 0
+          ignore_errors: true
+
+        - name: Run yum update with --skip-broken option
+          yum:
+            name: '*'
+            state: latest
+            #            exclude: python*
+            skip_broken: true
+          when: yum_update.failed
+          register: yum_update_skip_broken
+          notify:
+            - Reboot Server
+
+        - name: Just checking the errors
+          ansible.builtin.debug:
+            var: yum_update
+
+        - name: Check if yum update with --skip-broken option failed
+          fail:
+            vars:
+              skip_broken_failed: True
+            msg: "yum update with --skip-broken failed on {{ inventory_hostname }} with error message: {{ yum_update_skip_broken.stdout }}"
+          when: yum_update_skip_broken.stdout is defined and 'rror'  in yum_update_skip_broken.stdout
+          ignore_errors: true
+
+          #- name: Reboot the server
+          #reboot:
+          #when: yum_update.changed OR yum_update_skip_broken.changed
+          #ignore_errors: true
+
+    - name: Execute the uptime script
+      async: 45
+      poll: 5
+      register: uptimelog
+      shell: "uptime |awk '{print $3}'"
+      ignore_errors: true
+
+    - debug:
+        msg: "The server {{ ansible_hostname }} is up for  {{ ansible_uptime_seconds }} seconds = {{ uptimelog.stdout }}(days or hours:minutes)"
+
+  handlers:
+    - name: Reboot Server
+      reboot:
