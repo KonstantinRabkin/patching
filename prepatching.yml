@@ -1,0 +1,121 @@
+---
+- hosts: localhost
+  become: true
+  gather_facts: true
+
+  tasks:
+
+    - name: Remove temporary files
+      file:
+        path: "{{ item }}"
+        state: absent
+      with_items:
+        - /tmp/prepatching.{{ansible_date_time.date}}.zip
+        - /tmp/prepatching_logs/body.txt
+      run_once: true
+      ignore_errors: true
+
+    - name: Generating body message1
+      shell: 'echo " - Attached prepatching report of the following servers:" >> /tmp/prepatching_logs/body.txt; echo "" >> /tmp/prepatching_logs/body.txt'
+      ignore_errors: true
+
+- hosts: all
+  become: true
+  gather_facts: true
+
+  tasks:
+
+    - name: Remove temporary prepatch.log and prepatch.sh script
+      file:
+        path: "{{ item }}"
+        state: absent
+      with_items:
+        - /home/prepatching.log
+        - /home/prepatch.sh
+      ignore_errors: true
+
+    - name: Transfer prepatch script to remote host
+      copy:
+        src: 
+        dest: 
+        owner: 
+        group: 
+        mode: '0755'
+
+    - name: Execute the prepatch script
+      async: 240
+      poll: 5
+      shell: "sh "
+      ignore_errors: true
+
+    - name: Backup prepatch.log
+      copy:
+        src: /home/prepatching.log
+        dest: /tmp/prepatching_logs/{{ ansible_date_time.date }}/{{ ansible_hostname }}_prepatching_{{ ansible_date_time.date }}.txt
+        remote_src: true
+      ignore_errors: true
+
+    - name: Execute the uptime script
+      async: 45
+      poll: 5
+      register: uptimelog
+      shell: "uptime |awk '{print $3}'"
+      ignore_errors: true
+
+    - name: Check boot partition status
+      async: 45
+      poll: 5
+      register: boot_state
+      shell: "df -h /boot"
+      ignore_errors: true
+
+    - debug:
+        msg: "The server {{ ansible_hostname }} is up for  {{ ansible_uptime_seconds }} seconds = {{ uptimelog.stdout }}(days or hours:minutes)"
+
+    - debug:
+        msg: "The server {{ ansible_hostname }} is on OS version {{ ansible_distribution }} {{ ansible_distribution_version }} and kernel version {{ ansible_kernel }}"
+      register: presult
+
+    - debug:
+        msg: "{{ boot_state.stdout }}"
+
+    - name: Generating body message2
+      shell: 'echo "{{ ansible_hostname }}" >> /wfm/prepatching_logs/body.txt'
+      ignore_errors: true
+
+- hosts: localhost
+  become: true
+  gather_facts: true
+
+  tasks:
+
+    - name: Generating body message3
+      shell: "cat /tmp/prepatching_logs/body.txt"
+      register: body
+      ignore_errors: true
+
+    - name: Archive files to zip
+      archive:
+        path: "/tmp/prepatching_logs/{{ ansible_date_time.date }}"
+        dest: /tmp/prepatching.{{ansible_date_time.date}}.zip
+        format: zip
+
+    - name: Sending an email
+      mail:
+        port: 25
+        from: 
+        to: 
+        subject: Ansible-prepatching report
+        body: "{{ body.stdout }}"
+        attach: "/tmp/prepatching.{{ansible_date_time.date}}.zip"
+      run_once: true
+      ignore_errors: true
+
+    - name: Remove temporary files
+      file:
+        path: "{{ item }}"
+        state: absent
+      with_items:
+        - /tmp/prepatching.{{ansible_date_time.date}}.zip
+      run_once: true
+      ignore_errors: true
