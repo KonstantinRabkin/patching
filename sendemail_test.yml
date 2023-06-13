@@ -1,0 +1,18 @@
+---
+- hosts: localhost
+  become: true
+  gather_facts: true
+
+  tasks:
+
+    - name: Sending an email
+      mail:
+        port: 25
+        from: 
+        to: 
+        subject: Ansible-sendemail test
+        body: "Test"
+        attach: "/tmp/prepatching.{{ansible_date_time.date}}.zip"
+      run_once: true
+      ignore_errors: true
+      delegate_to: localhost
