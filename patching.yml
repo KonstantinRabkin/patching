@@ -17,9 +17,9 @@
       args:
         warn: false
 
-       - name: Disable SELinux
-         selinux:
-           state: disabled
+    - name: Disable SELinux
+      selinux:
+        state: disabled
 
     - name: "Starting patching change"
       block:
