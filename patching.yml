@@ -18,8 +18,8 @@
         warn: false
 
        - name: Disable SELinux
-      selinux:
-        state: disabled
+         selinux:
+           state: disabled
 
     - name: "Starting patching change"
       block:
