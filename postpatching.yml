@@ -1,0 +1,29 @@
+---
+- hosts: all
+  become: true
+  gather_facts: true
+
+  tasks:
+
+    - name: Check kernel state
+      async: 45
+      poll: 5
+      register: kernel_state
+      shell: "yum list kernel"
+      ignore_errors: true
+
+    - name: Execute the uptime script
+      async: 45
+      poll: 5
+      register: uptimelog
+      shell: "/usr/bin/cut -d. -f1 /proc/uptime"
+      ignore_errors: true
+
+    - name: Calculate uptime in minutes
+      set_fact:
+        uptime_minutes: "{{ uptimelog.stdout | int // 60 }}"
+
+    - debug:
+        msg: "The server {{ ansible_hostname }} is on {{ ansible_distribution }} {{ ansible_distribution_version }}, kernel version {{ ansible_kernel }} and up for {{ uptime_minutes }} minutes"
+    - debug:
+        msg: "{{ kernel_state.stdout.split('\n') }}"

@@ -1,0 +1,58 @@
+---
+- name: Generate Uptime Report and Send via Email
+  hosts: localhost
+  gather_facts: true
+  become: true
+
+  vars_prompt:
+    - name: group
+      prompt: "Please enter file name located in /home/X/hostgroups/patching_groups/ folder\n"
+      default: "infra"
+      private: no
+
+  tasks:
+
+    - name: Remove temporary files
+      file:
+        path: "{{ item }}"
+        state: absent
+      with_items:
+        - /tmp/patching_report.txt
+      ignore_errors: true
+
+    - name: Remove temporary files
+      set_fact:
+        sname: "/home/X/hostgroups/patching_groups/{{ group }}"
+      ignore_errors: true
+
+    - name: Run remote script
+      shell: "sh /home/X/remote_scripts/postpatching_report.sh {{ sname }} >> /tmp/patching_report.txt"
+      async: 600  # 600 seconds // 10 min
+      poll: 5     # poll until the job completes
+      become_user: X
+      ignore_errors: true
+
+    - name: Generate report
+      shell: "cat /tmp/patching_report.txt"
+      register: os_report
+      ignore_errors: true
+
+    - name: Generate patching report using Jinja2 template
+      template:
+        src: /home/X/templates/postpatching_report.j2
+        dest: /tmp/patching_report.html
+      ignore_errors: true
+      vars:
+        os_report_lines: "{{ os_report.stdout }}"
+
+    - name: Sending an email
+      mail:
+        host: localhost
+        port: 25
+        from: Z
+        to: Y
+        subject: Attention! Please review attached postpatching status report
+        body: Attached postpatching status report
+        attach:
+        - /tmp/patching_report.html
+      run_once: true

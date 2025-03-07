@@ -1,0 +1,8 @@
+---
+- hosts: all
+  gather_facts: true
+
+  tasks:
+
+    - debug:
+        msg: "The server {{ ansible_hostname }} is on OS version {{ ansible_distribution }} {{ ansible_distribution_version }} and kernel version {{ ansible_kernel }}"

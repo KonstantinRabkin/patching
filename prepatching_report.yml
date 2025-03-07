@@ -1,0 +1,202 @@
+---
+- hosts: localhost
+  become: true
+  ignore_unreachable: true
+
+  vars_prompt:
+    - name: group
+      prompt: "Please enter file name located in /home/X/hostgroups/patching_groups/ folder\n"
+      default: "infra"
+      private: no
+
+  tasks:
+
+    - name: Remove temporary files
+      file:
+        path: "{{ item }}"
+        state: absent
+      with_items:
+        - /tmp/prepatching.{{ansible_date_time.date}}.zip
+        - /tmp/body.txt
+        - /tmp/patching_report.txt
+        - /home/X/hostgroups/dynamic_inventory
+      run_once: true
+      ignore_errors: true
+
+    - name: Set facts
+      set_fact:
+        sname: "/home/X/hostgroups/patching_groups/{{ group }}"
+      ignore_errors: true
+
+    - name: Ensure dynamic inventory file exists
+      file:
+        path: /home/X/hostgroups/dynamic_inventory
+        state: touch
+
+    - name: Add header to dynamic inventory file
+      lineinfile:
+        path: /home/X/hostgroups/dynamic_inventory
+        line: "[dynamic_group]"
+        create: yes
+
+    - name: Add hosts to dynamic inventory file
+      lineinfile:
+        path: /home/X/hostgroups/dynamic_inventory
+        line: "{{ item }}"
+        insertafter: "[dynamic_group]"
+      with_lines:
+        - cat {{ sname }}
+
+    - name: Generating body message1
+      shell: 'echo " - Attached prepatching report" >> /tmp/body.txt; echo "" >> /tmp/body.txt'
+      ignore_errors: true
+
+    - name: Create a directory
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: X
+        group: users
+      with_items:
+        - /w/prepatching_logs/{{ ansible_date_time.date }}
+        - /home/X/{{ ansible_date_time.date }}
+
+    - name: Run remote script
+      shell: "sh /home/X/remote_scripts/prepatching_report.sh {{ sname }} >> /tmp/patching_report.txt"
+      async: 600  # 600 seconds // 10 min
+      poll: 5     # poll until the job completes
+      become_user: X
+      ignore_errors: true
+
+- hosts: dynamic_group
+  become: true
+  #  gather_facts: true
+
+  tasks:
+
+    - name: Remove temporary prepatch.log and prepatch.sh script
+      file:
+        path: "{{ item }}"
+        state: absent
+      with_items:
+        - /home/X/prepatch.sh
+        - /prepatching.log
+      ignore_errors: true
+
+    - name: Preparing /var and /boot partitions for a patching
+      shell: "yum clean all"
+      ignore_errors: true
+
+    - name: Transfer prepatch script to remote host
+      copy:
+        src: /home/X/remote_scripts/prepatch.sh
+        dest: /home/X/prepatch.sh
+        owner: X
+        group: users
+        mode: '0755'
+
+    - name: Execute the prepatch script
+      async: 240
+      poll: 5
+      shell: "sh /home/X/prepatch.sh"
+      ignore_errors: true
+
+    - name: Backup prepatch.log
+      fetch:
+        src: /prepatching.log
+        dest: /home/X/{{ ansible_date_time.date }}
+
+    - name: Backup prepatch.log
+      copy:
+        src: /home/X/{{ ansible_date_time.date }}
+        dest: /w/prepatching_logs/
+      ignore_errors: true
+      delegate_to: localhost
+
+    - name: Check boot partition status
+      async: 45
+      poll: 5
+      register: bootvar_state
+      shell: "df -h /boot /var"
+      ignore_errors: true
+
+    - name: Check kernel state
+      async: 45
+      poll: 5
+      register: kernel_state
+      shell: "yum list kernel"
+      ignore_errors: true
+
+    - name: Execute the uptime script
+      async: 45
+      poll: 5
+      register: uptimelog
+      shell: "/usr/bin/cut -d. -f1 /proc/uptime"
+      ignore_errors: true
+
+    - name: Calculate uptime in minutes
+      set_fact:
+        uptime_minutes: "{{ uptimelog.stdout | int // 60 }}"
+
+    - debug:
+        msg: "The server {{ ansible_hostname }} is on {{ ansible_distribution }} {{ ansible_distribution_version }}, kernel version {{ ansible_kernel }} and up for {{ uptime_minutes }} minutes"
+
+    - debug:
+        msg: "{{ kernel_state.stdout.split('\n') }}"
+
+    - debug:
+        msg: "{{ bootvar_state.stdout.split('\n') }}"
+
+
+- hosts: localhost
+  become: true
+  gather_facts: true
+
+  tasks:
+
+    - name: Generate report
+      shell: "cat /tmp/patching_report.txt"
+      register: os_report
+      ignore_errors: true
+
+    - name: Generating body message3
+      shell: "cat /tmp/body.txt"
+      register: body
+      ignore_errors: true
+
+    - name: Generate patching report using Jinja2 template
+      template:
+        src: /home/X/templates/patching_report.j2
+        dest: /tmp/patching_report.html
+      ignore_errors: true
+      vars:
+        os_report_lines: "{{ os_report.stdout }}"
+
+    - name: Archive files to zip
+      archive:
+        path: "/w/prepatching_logs/{{ ansible_date_time.date }}"
+        dest: /tmp/prepatching.{{ansible_date_time.date}}.zip
+        format: zip
+
+    - name: Sending an email
+      mail:
+        port: 25
+        from: Y
+        to: Z
+        subject: Ansible-prepatching report
+        body: "{{ body.stdout }}"
+        attach:
+        - /tmp/prepatching.{{ansible_date_time.date}}.zip
+        - /tmp/patching_report.html
+      run_once: true
+      ignore_errors: true
+
+    - name: Remove temporary files
+      file:
+        path: "{{ item }}"
+        state: absent
+      with_items:
+        - /tmp/prepatching.{{ansible_date_time.date}}.zip
+      run_once: true
+      ignore_errors: true
+

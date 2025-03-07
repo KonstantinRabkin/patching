@@ -1,0 +1,8 @@
+---
+- hosts: all
+  gather_facts: true
+
+  tasks:
+
+    - debug:
+        msg: "Server {{ ansible_hostname }} is on {{ ansible_product_name }} has total memory size {{ ansible_memtotal_mb }} mb, has swap size {{ ansible_swaptotal_mb }} mb, has processor cores {{ ansible_processor_cores }}, has processor count of {{ ansible_processor_count }}, has threads per core {{ ansible_processor_threads_per_core }} and number of virtual cpu {{ ansible_processor_vcpus }}"
