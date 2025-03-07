@@ -1,5 +1,7 @@
 #############################################################################################
+
 Scripts designed to streamline and automate patching activities, ensuring efficiency and consistency in your operations:
+
 #############################################################################################
 
 prepatching.yml: Prepares systems for patching by validating prerequisites and ensuring readiness.
@@ -13,7 +15,9 @@ postpatching_report.yml: Creates a report summarizing the results and statuses o
 
 
 #############################################################################################
+
 Essential scripts to support your day-to-day operational needs efficiently and effectively: 
+
 #############################################################################################
 
 Health_Check.yml: - Morning health check script provide a daily report on the status of all servers under your responsibility, ensuring you stay informed and proactive.
