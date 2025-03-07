@@ -21,5 +21,7 @@ Essential scripts to support your day-to-day operational needs efficiently and e
 #############################################################################################
 
 Health_Check.yml: - Morning health check script provide a daily report on the status of all servers under your responsibility, ensuring you stay informed and proactive.
+
 osversion.yml: Checks and reports the operating system versions of servers, helping to ensure consistency and compliance across your environment.
+
 product_check.yml: Verifies and reports the servers specs.
